@@ -1,0 +1,20 @@
+LIBRARY ETWProvider
+EXPORTS
+    ETWRegisterCustomProviders      @1
+    ETWUnregisterCustomProviders    @2
+    ETWEnterScopeMain               @3
+    ETWLeaveScopeMain               @4
+    ETWEnterScopeTask               @5
+    ETWLeaveScopeTask               @6
+    ETWThreadID                     @7
+    ETWMarkerMain                   @8
+    ETWMarkerFormatMain             @9
+    ETWMarkerFormatMainV            @10
+    ETWMarkerTask                   @11
+    ETWMarkerFormatTask             @12
+    ETWMarkerFormatTaskV            @13
+    ETWMouseDown                    @14
+    ETWMouseUp                      @15
+    ETWMouseMove                    @16
+    ETWMouseWheel                   @17
+    ETWKeyDown                      @18

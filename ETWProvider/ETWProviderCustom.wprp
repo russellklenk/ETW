@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<WindowsPerformanceRecorder Version="1.0" Comments="Custom Event Recording Profile" Company="DR Systems" Copyright="DR Systems">
+    <Profiles>
+        <!-- The EventCollector block is used to specify the number and size of the buffers
+          to be used when recording ETW data. The Id must match what is specified in the
+          Collectors blocks. The units for Buffer Size are KB. -->
+        <EventCollector Id="ETWProvider-Collector" Name="ETWProvider Event Collector">
+            <BufferSize Value="1024" />
+            <Buffers Value="64" PercentageOfTotalMemory="false" />
+        </EventCollector>
+        <!-- A fully specified .wprp file should have four profiles, with DetailLevel set to Verbose and Light and with Logging Mode set to
+          Memory and File. The Light options can be skipped, but then light logging will be disabled when your profile is enabled.
+          The ID must be of the form Name.DetailLevel.LoggingMode. The Description tag is mandatory but is ignored, except for the
+          description of the last Profile which is displayed in wprui. -->
+        <Profile Id="ETWProvider.Verbose.Memory" Name="ETWProvider" Description="ETWProvider Event Collectors" DetailLevel="Verbose" LoggingMode="Memory">
+            <Collectors>
+                <!-- EventCollectorId must match the EventCollector ID specified above -->
+                <EventCollectorId Value="ETWProvider-Collector">
+                    <EventProviders>
+                        <EventProvider Id="ETW.CORE" Name="569b775f-f584-483d-9149-aa399b74beba" Stack="true"></EventProvider>
+                        <EventProvider Id="ETW.WINISS" Name="f91fee0a-1dc1-42c4-a3a7-7602eaf0220e" Stack="true"></EventProvider>
+                        <EventProvider Id="ETW.COPYIMG" Name="1d076446-4e3b-43fb-bc37-a50b04986c71"></EventProvider>
+                    </EventProviders>
+                </EventCollectorId>
+            </Collectors>
+        </Profile>
+        <!-- Redundant Profile definition for Verbose.File - identical to Verbose.Memory in this case. -->
+        <Profile Id="ETWProvider.Verbose.File" Name="ETWProvider" Description="ETWProvider Event Collectors" DetailLevel="Verbose" LoggingMode="File">
+            <Collectors>
+                <EventCollectorId Value="ETWProvider-Collector">
+                    <EventProviders>
+                        <EventProvider Id="ETW.CORE" Name="569b775f-f584-483d-9149-aa399b74beba" Stack="true"></EventProvider>
+                        <EventProvider Id="ETW.WINISS" Name="f91fee0a-1dc1-42c4-a3a7-7602eaf0220e" Stack="true"></EventProvider>
+                        <EventProvider Id="ETW.COPYIMG" Name="1d076446-4e3b-43fb-bc37-a50b04986c71"></EventProvider>
+                    </EventProviders>
+                </EventCollectorId>
+            </Collectors>
+        </Profile>
+        <!-- Redundant Profile definition for Light.Memory - identical to Verbose.Memory in this case. -->
+        <Profile Id="ETWProvider.Light.Memory" Name="ETWProvider" Description="ETWProvider Event Collectors" DetailLevel="Light" LoggingMode="Memory">
+            <Collectors>
+                <EventCollectorId Value="ETWProvider-Collector">
+                    <EventProviders>
+                        <EventProvider Id="ETW.CORE" Name="569b775f-f584-483d-9149-aa399b74beba" Stack="true"></EventProvider>
+                        <EventProvider Id="ETW.WINISS" Name="f91fee0a-1dc1-42c4-a3a7-7602eaf0220e" Stack="true"></EventProvider>
+                        <EventProvider Id="ETW.COPYIMG" Name="1d076446-4e3b-43fb-bc37-a50b04986c71"></EventProvider>
+                    </EventProviders>
+                </EventCollectorId>
+            </Collectors>
+        </Profile>
+        <!-- Redundant Profile definition for Light.File - identical to Verbose.Memory in this case. Since this is 
+          the last profile the Description field from this Profile is shown in wprui. -->
+        <Profile Id="ETWProvider.Light.File" Name="ETWProvider" Description="ETWProvider Event Collectors" DetailLevel="Light" LoggingMode="File">
+            <Collectors>
+                <EventCollectorId Value="ETWProvider-Collector">
+                    <EventProviders>
+                        <EventProvider Id="ETW.CORE" Name="569b775f-f584-483d-9149-aa399b74beba" Stack="true"></EventProvider>
+                        <EventProvider Id="ETW.WINISS" Name="f91fee0a-1dc1-42c4-a3a7-7602eaf0220e" Stack="true"></EventProvider>
+                        <EventProvider Id="ETW.COPYIMG" Name="1d076446-4e3b-43fb-bc37-a50b04986c71"></EventProvider>
+                    </EventProviders>
+                </EventCollectorId>
+            </Collectors>
+        </Profile>
+    </Profiles>
+</WindowsPerformanceRecorder>
