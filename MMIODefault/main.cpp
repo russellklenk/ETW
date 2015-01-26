@@ -30,7 +30,7 @@
     __pragma(warning(pop))
 
 /// @summary Define the size of the default file mapping, in bytes.
-#define MAPPING_SIZE    (1ULL * 1024ULL * 1024ULL)
+#define MAPPING_SIZE    (19ULL * 1024ULL * 1024ULL)
 
 /// @summary Use the _rotl intrinsic, which is significantly more efficient
 /// on MSVC; use (x << y) | (x >> (32 - y)) on gcc for the same effect.
@@ -151,11 +151,10 @@ static bool print_file_info(char const *path, int64_t &file_size)
 /// @param bytes_to_map On return, this value is set to the size to pass as dwNumberOfBytesToMap when calling MapViewOfFile.
 /// @param actual_size On return, this value is set to the actual size of the file mapping, in bytes.
 /// @return false if end-of-file, or true to proceed with mapping.
-static bool next_mapping(file_state_t const *state, DWORD &offset_high, DWORD &offset_low, SIZE_T &bytes_to_map, size_t &actual_size)
+static bool next_mapping(file_state_t *state, DWORD &offset_high, DWORD &offset_low, SIZE_T &bytes_to_map, size_t &actual_size)
 {
-    int64_t next_offset = state->FileOffset + state->MapSize;
+    int64_t next_offset = state->FileOffset;
     int64_t file_size   = state->FileSize;
-    size_t  map_size    = MAPPING_SIZE;
     if (file_size - next_offset <= 0)
     {   // next range starts outside of the valid range. we're done.
         offset_high  = 0;
@@ -174,7 +173,7 @@ static bool next_mapping(file_state_t const *state, DWORD &offset_high, DWORD &o
     {   // we're at the end of the file, so only a portion will be mapped.
         // in this case, specify zero for the size in MapViewOfFile[Ex].
         bytes_to_map = 0;
-        actual_size  = file_size - next_offset;
+        actual_size  = size_t(file_size - next_offset);
     }
     // break the 64-bit offset into high and low 32-bit offsets.
     // the offset must be a multiple of the system allocation granularity (64KB).
@@ -222,7 +221,7 @@ static bool open_file(file_state_t *state, char const *path, int64_t file_size)
         fprintf(stderr, "ERROR: Unable to open file \'%s\': 0x%08X\n", path, GetLastError());
         goto error_cleanup;
     }
-    if ((md = CreateFileMappingA(fd, NULL, FILE_MAP_READ, 0, 0, NULL)) == NULL)
+    if ((md = CreateFileMappingA(fd, NULL, PAGE_READONLY, 0, 0, NULL)) == NULL)
     {   // unable to create the file mapping; fail immediately.
         fprintf(stderr, "ERROR: Unable to create file mapping: \'%s\': 0x%08X\n", path, GetLastError());
         goto error_cleanup;
@@ -259,11 +258,14 @@ error_cleanup:
 /// @return false if end-of-file was reached or an error occurred.
 static bool update_view(file_state_t *state, bool &eof)
 {
-    DWORD  offset_high  = 0;
-    DWORD  offset_low   = 0;
-    SIZE_T bytes_to_map = 0;
-    size_t actual_size  = 0;
-    void  *view         = NULL;
+    DWORD  offset_high   = 0;
+    DWORD  offset_low    = 0;
+    SIZE_T bytes_to_map  = 0;
+    size_t actual_size   = 0;
+    void  *view          = NULL;
+
+    // update the current file offset:
+    state->FileOffset   += state->MapSize;
 
     // unmap any existing view, and invalidate pointers.
     if (state->MapBase  != NULL)
@@ -302,7 +304,6 @@ static void close_file(file_state_t *state)
     if (state->MapBase != NULL) UnmapViewOfFile(state->MapBase);
     if (state->Filmap  != NULL) CloseHandle(state->Filmap);
     if (state->Fildes  != INVALID_HANDLE_VALUE) CloseHandle(state->Fildes);
-    state->FileSize     = file_size;
     state->FileOffset   = 0;
     state->Fildes       = INVALID_HANDLE_VALUE;
     state->Filmap       = NULL;
@@ -313,7 +314,32 @@ static void close_file(file_state_t *state)
     state->BufferCur    = NULL;
 }
 
-static inline uint32_t get_block32(uint32_t *buffer, int i)
+static bool elevate_process_privileges(void)
+{
+    TOKEN_PRIVILEGES tp;
+    HANDLE        token;
+    LUID          luid1;
+    LUID          luid2;
+
+    if (OpenProcessToken(GetCurrentProcess(), TOKEN_ALL_ACCESS, &token) && 
+        LookupPrivilegeValue(NULL, SE_MANAGE_VOLUME_NAME, &luid1) && 
+        LookupPrivilegeValue(NULL, SE_CREATE_GLOBAL_NAME, &luid2))
+    {   // error handling? what error handling?
+        tp.PrivilegeCount           = 1;
+        tp.Privileges[0].Luid       = luid1;
+        tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+        BOOL r1 = AdjustTokenPrivileges(token, FALSE, &tp, sizeof(tp), NULL, NULL);
+        tp.PrivilegeCount           = 1;
+        tp.Privileges[0].Luid       = luid2;
+        tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+        BOOL r2 = AdjustTokenPrivileges(token, FALSE, &tp, sizeof(tp), NULL, NULL);
+        CloseHandle(token);
+        return (r1 && r2);
+    }
+    else return false;
+}
+
+static inline uint32_t get_block32(uint32_t const *buffer, int i)
 {
     return buffer[i];
 }
@@ -463,6 +489,11 @@ int main(int argc, char **argv)
         fprintf(stderr, "ERROR: High-resolution timer not available.\n\n");
         print_usage();
     }
+    if (!elevate_process_privileges())
+    {   // unable to acquire the necessary privileges.
+        fprintf(stderr, "ERROR: Unable to acquire privileges.\n");
+        exit(EXIT_FAILURE);
+    }
     if (!print_file_info(argv[1], file_size))
     {   // unable to stat the input file.
         exit(EXIT_FAILURE);
@@ -475,7 +506,9 @@ int main(int argc, char **argv)
     hash_init(0, file_state.Hash);
     bool eof = false;
     do
-    {   // perform some computation on each byte in the mapped range.
+    {   // emit a marker event for viewing in WPA.
+        ETWMarkerMain("Tick");
+        // perform some computation on each byte in the mapped range.
         hash_update(file_state.BufferBeg, file_state.MapSize, file_state.Hash);
         // update the view to point to the next contiguous range in the file.
         // eof will be set to true if we've hit end-of-file.
