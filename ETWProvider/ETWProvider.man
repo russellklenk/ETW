@@ -1,50 +1,50 @@
 ﻿<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <!--
-This file defines a set of Event Tracing for Windows (ETW) providers that 
+This file defines a set of Event Tracing for Windows (ETW) providers that
 are used to emit custom events into a trace being recorded by xperf/wpr or
-logman. The intent of the custom providers is to add some context to the 
+logman. The intent of the custom providers is to add some context to the
 raw kernel counter data in order to help with interpretation.
 
 This file is processed using the following command line:
   mc.exe -um %(Filename)%(Extension) -z %(Filename)Generated
 The outputs of this process are:
   %(Filename)Generated.h and %(Filename)Generated.rc
-  
+
 The mc.exe executable is referred to as the message compiler, and this process
-is implemented as a custom build step that executes before the source code is 
+is implemented as a custom build step that executes before the source code is
 compiled. The mc.exe file can be found at:
   C:\Program Files (x86)\Microsoft SDKs\Windows\v7.1A\Bin\mc.exe
-  
+
 One thing to be aware of is that in VS2010, the custom build step will not run
 if you don't have any source files in the project. VS2013 does not have this
 problem.
-  
-The generated header file should be included by one or more source files, 
+
+The generated header file should be included by one or more source files,
 and the resource file should either be added to the project being instrumented
-or merged in with an existing resource file. In this case, since we build the 
-custom ETW provider as a .DLL file, ETWProvider.dll, we just include the 
+or merged in with an existing resource file. In this case, since we build the
+custom ETW provider as a .DLL file, ETWProvider.dll, we just include the
 generated files in the ETWProvider project.
 
-The header file contains macros and functions to emit events. For more 
-information on the format of the instrumentation manifest (this file), see the 
+The header file contains macros and functions to emit events. For more
+information on the format of the instrumentation manifest (this file), see the
 MSDN article 'Writing an Instrumentation Manifest', currently available at:
   http://msdn.microsoft.com/en-us/library/windows/desktop/dd996930%28v=vs.85%29.aspx
-  
-The above-referenced article mentions a GUI tool, ECManGen.exe, which is part 
-of the Windows SDK (in the Bin directory) and allows you to generate the 
+
+The above-referenced article mentions a GUI tool, ECManGen.exe, which is part
+of the Windows SDK (in the Bin directory) and allows you to generate the
 manifest without ever having to edit the XML manually. The specific path is:
   C:\Program Files (x86)\Microsoft SDKs\Windows\v7.1A\Bin\ECMangen.exe
-  
-To make this easier to get to, add it to your Tools menu. To do this, 
-go Tools->External Tools..., click 'Add...' and specify ECManGen as the Title, 
-C:\Program Files (x86)\Microsoft SDKs\Windows\v7.1A\Bin\ECMangen.exe as the 
+
+To make this easier to get to, add it to your Tools menu. To do this,
+go Tools->External Tools..., click 'Add...' and specify ECManGen as the Title,
+C:\Program Files (x86)\Microsoft SDKs\Windows\v7.1A\Bin\ECMangen.exe as the
 Command, and $(ProjectDir) as the Initial Directory.
 
-If you do want to edit this file manually, and are using Visual Studio as your 
-XML editor, then you can get some IntelliSense help by using the EventManifest 
+If you do want to edit this file manually, and are using Visual Studio as your
+XML editor, then you can get some IntelliSense help by using the EventManifest
 schema. To do this, go XML->Schemas..., click 'Add...' and then select file:
   C:\Program Files (x86)\Microsoft SDKs\Windows\v7.1A\Include\eventman.xsd
-  
+
 I cannot find this schema file in later (v8.0, v8.1, v8.1A) SDK directories.
 
 Before recording traces you need to execute the following commands:
@@ -53,10 +53,10 @@ Before recording traces you need to execute the following commands:
   wevutil um ETWProvider.man
   wevutil im ETWProvider.man
 
-This unregisters, and then re-registers the custom ETW providers with the ETW 
+This unregisters, and then re-registers the custom ETW providers with the ETW
 system. This process should be implemented as a custom build step that executes
-after your executable is compiled and linked. To generate a trace on a non-dev 
-system, execute these steps manually by editing and running the provided batch 
+after your executable is compiled and linked. To generate a trace on a non-dev
+system, execute these steps manually by editing and running the provided batch
 file script, etwregister.cmd.
 -->
 <instrumentationManifest xsi:schemaLocation="http://schemas.microsoft.com/win/2004/08/events eventman.xsd" xmlns="http://schemas.microsoft.com/win/2004/08/events" xmlns:win="http://manifests.microsoft.com/win/2004/08/windows/events" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:trace="http://schemas.microsoft.com/win/2004/08/events/trace">
@@ -193,18 +193,7 @@ file script, etwregister.cmd.
     <localization>
         <resources culture="en-US">
             <stringTable>
-                <string id="ETW_WINISS.map.eImageSource.2.message" value="eDiskImage" />
-                <string id="ETW_WINISS.map.eImageSource.1.message" value="eMemoryImage" />
-                <string id="ETW_WINISS.map.eImageSource.0.message" value="eSourceUnknown" />
-                <string id="ETW_WINISS.map.eCompType.8.message" value="COMPRESS_PNG" />
-                <string id="ETW_WINISS.map.eCompType.7.message" value="COMPRESS_JPEGLOSSLESS_NOPRED" />
-                <string id="ETW_WINISS.map.eCompType.6.message" value="COMPRESS_JPEGLOSSLESS" />
-                <string id="ETW_WINISS.map.eCompType.5.message" value="COMPRESS_RLE" />
-                <string id="ETW_WINISS.map.eCompType.4.message" value="COMPRESS_DECOMPRESS" />
-                <string id="ETW_WINISS.map.eCompType.3.message" value="COMPRESS_JPEG2000_LS" />
-                <string id="ETW_WINISS.map.eCompType.2.message" value="COMPRESS_JPEG2000" />
-                <string id="ETW_WINISS.map.eCompType.1.message" value="COMPRESS_JPEG" />
-                <string id="ETW_WINISS.map.eCompType.0.message" value="COMPRESS_NONE" />
+                <!-- <string id="A.map.foo.0.message" value="your text" /> -->
             </stringTable>
         </resources>
     </localization>
