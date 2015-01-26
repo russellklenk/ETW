@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" standalone='yes'?>
-<WindowsPerformanceRecorder Version="1.0" Comments="Custom File I/O Recording Profile" Company="DR Systems" Copyright="DR Systems">
+<WindowsPerformanceRecorder Version="1.0" Comments="Custom File I/O Recording Profile">
     <Profiles>
         <Profile Id="ETWProviderFileIO.Verbose.File" Name="ETWProviderFileIO" Description="ETWProvider File I/O (File)" DetailLevel="Verbose" Base="BaseProfile.Verbose" LoggingMode="File">
             <Collectors Operation="Add">
@@ -35,3 +35,4 @@
         </TraceMergeProperty>
     </TraceMergeProperties>
 </WindowsPerformanceRecorder>
+

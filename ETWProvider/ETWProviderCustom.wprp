@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
-<WindowsPerformanceRecorder Version="1.0" Comments="Custom Event Recording Profile" Company="DR Systems" Copyright="DR Systems">
+<WindowsPerformanceRecorder Version="1.0" Comments="Custom Event Recording Profile">
     <Profiles>
         <!-- The EventCollector block is used to specify the number and size of the buffers
           to be used when recording ETW data. The Id must match what is specified in the
@@ -17,9 +17,9 @@
                 <!-- EventCollectorId must match the EventCollector ID specified above -->
                 <EventCollectorId Value="ETWProvider-Collector">
                     <EventProviders>
-                        <EventProvider Id="ETW.CORE" Name="569b775f-f584-483d-9149-aa399b74beba" Stack="true"></EventProvider>
-                        <EventProvider Id="ETW.WINISS" Name="f91fee0a-1dc1-42c4-a3a7-7602eaf0220e" Stack="true"></EventProvider>
-                        <EventProvider Id="ETW.COPYIMG" Name="1d076446-4e3b-43fb-bc37-a50b04986c71"></EventProvider>
+                        <EventProvider Id="ETW.MAIN_THREAD" Name="042CD377-8F6E-4BF0-93DE-B4BA32234771" Stack="true"></EventProvider>
+                        <EventProvider Id="ETW.TASK_THREAD" Name="08F6A7B2-48E7-4AD4-9A22-50806374B084" Stack="true"></EventProvider>
+                        <EventProvider Id="ETW.USER_INPUT"  Name="70E2503B-C6F3-4780-B323-BD8ED0C61BF8"></EventProvider>
                     </EventProviders>
                 </EventCollectorId>
             </Collectors>
@@ -29,9 +29,9 @@
             <Collectors>
                 <EventCollectorId Value="ETWProvider-Collector">
                     <EventProviders>
-                        <EventProvider Id="ETW.CORE" Name="569b775f-f584-483d-9149-aa399b74beba" Stack="true"></EventProvider>
-                        <EventProvider Id="ETW.WINISS" Name="f91fee0a-1dc1-42c4-a3a7-7602eaf0220e" Stack="true"></EventProvider>
-                        <EventProvider Id="ETW.COPYIMG" Name="1d076446-4e3b-43fb-bc37-a50b04986c71"></EventProvider>
+                        <EventProvider Id="ETW.MAIN_THREAD" Name="042CD377-8F6E-4BF0-93DE-B4BA32234771" Stack="true"></EventProvider>
+                        <EventProvider Id="ETW.TASK_THREAD" Name="08F6A7B2-48E7-4AD4-9A22-50806374B084" Stack="true"></EventProvider>
+                        <EventProvider Id="ETW.USER_INPUT"  Name="70E2503B-C6F3-4780-B323-BD8ED0C61BF8"></EventProvider>
                     </EventProviders>
                 </EventCollectorId>
             </Collectors>
@@ -41,25 +41,26 @@
             <Collectors>
                 <EventCollectorId Value="ETWProvider-Collector">
                     <EventProviders>
-                        <EventProvider Id="ETW.CORE" Name="569b775f-f584-483d-9149-aa399b74beba" Stack="true"></EventProvider>
-                        <EventProvider Id="ETW.WINISS" Name="f91fee0a-1dc1-42c4-a3a7-7602eaf0220e" Stack="true"></EventProvider>
-                        <EventProvider Id="ETW.COPYIMG" Name="1d076446-4e3b-43fb-bc37-a50b04986c71"></EventProvider>
+                        <EventProvider Id="ETW.MAIN_THREAD" Name="042CD377-8F6E-4BF0-93DE-B4BA32234771" Stack="true"></EventProvider>
+                        <EventProvider Id="ETW.TASK_THREAD" Name="08F6A7B2-48E7-4AD4-9A22-50806374B084" Stack="true"></EventProvider>
+                        <EventProvider Id="ETW.USER_INPUT"  Name="70E2503B-C6F3-4780-B323-BD8ED0C61BF8"></EventProvider>
                     </EventProviders>
                 </EventCollectorId>
             </Collectors>
         </Profile>
-        <!-- Redundant Profile definition for Light.File - identical to Verbose.Memory in this case. Since this is 
+        <!-- Redundant Profile definition for Light.File - identical to Verbose.Memory in this case. Since this is
           the last profile the Description field from this Profile is shown in wprui. -->
         <Profile Id="ETWProvider.Light.File" Name="ETWProvider" Description="ETWProvider Event Collectors" DetailLevel="Light" LoggingMode="File">
             <Collectors>
                 <EventCollectorId Value="ETWProvider-Collector">
                     <EventProviders>
-                        <EventProvider Id="ETW.CORE" Name="569b775f-f584-483d-9149-aa399b74beba" Stack="true"></EventProvider>
-                        <EventProvider Id="ETW.WINISS" Name="f91fee0a-1dc1-42c4-a3a7-7602eaf0220e" Stack="true"></EventProvider>
-                        <EventProvider Id="ETW.COPYIMG" Name="1d076446-4e3b-43fb-bc37-a50b04986c71"></EventProvider>
+                        <EventProvider Id="ETW.MAIN_THREAD" Name="042CD377-8F6E-4BF0-93DE-B4BA32234771" Stack="true"></EventProvider>
+                        <EventProvider Id="ETW.TASK_THREAD" Name="08F6A7B2-48E7-4AD4-9A22-50806374B084" Stack="true"></EventProvider>
+                        <EventProvider Id="ETW.USER_INPUT"  Name="70E2503B-C6F3-4780-B323-BD8ED0C61BF8"></EventProvider>
                     </EventProviders>
                 </EventCollectorId>
             </Collectors>
         </Profile>
     </Profiles>
 </WindowsPerformanceRecorder>
+

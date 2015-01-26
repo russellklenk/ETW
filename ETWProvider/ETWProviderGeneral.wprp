@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" standalone='yes'?>
-<WindowsPerformanceRecorder Version="1.0" Comments="Custom General Recording Profile" Company="DR Systems" Copyright="DR Systems">
+<WindowsPerformanceRecorder Version="1.0" Comments="Custom General Recording Profile">
     <Profiles>
         <Profile Id="ETWProviderGeneral.Verbose.File" Name="ETWProviderGeneral" Description="ETWProvider General (File)" DetailLevel="Verbose" Base="BaseProfile.Verbose" LoggingMode="File">
             <Collectors Operation="Add">
@@ -74,3 +74,4 @@
         </TraceMergeProperty>
     </TraceMergeProperties>
 </WindowsPerformanceRecorder>
+
