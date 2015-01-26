@@ -7,6 +7,10 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ETWProvider", "ETWProvider\
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ETWClient", "ETWClient\ETWClient.vcxproj", "{77381BCC-29BF-4771-8598-952AF0C932DC}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MMIODefault", "MMIODefault\MMIODefault.vcxproj", "{1BF638CC-0FBC-43A1-970A-31E9819CC95C}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MMIOPrefetch", "MMIOPrefetch\MMIOPrefetch.vcxproj", "{0CE38CBA-9A3C-4820-82CA-5B22F98BD681}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -31,6 +35,18 @@ Global
 		{77381BCC-29BF-4771-8598-952AF0C932DC}.Release|Win32.Build.0 = Release|Win32
 		{77381BCC-29BF-4771-8598-952AF0C932DC}.Release|x64.ActiveCfg = Release|x64
 		{77381BCC-29BF-4771-8598-952AF0C932DC}.Release|x64.Build.0 = Release|x64
+		{1BF638CC-0FBC-43A1-970A-31E9819CC95C}.Debug|Win32.ActiveCfg = Debug|Win32
+		{1BF638CC-0FBC-43A1-970A-31E9819CC95C}.Debug|Win32.Build.0 = Debug|Win32
+		{1BF638CC-0FBC-43A1-970A-31E9819CC95C}.Debug|x64.ActiveCfg = Debug|Win32
+		{1BF638CC-0FBC-43A1-970A-31E9819CC95C}.Release|Win32.ActiveCfg = Release|Win32
+		{1BF638CC-0FBC-43A1-970A-31E9819CC95C}.Release|Win32.Build.0 = Release|Win32
+		{1BF638CC-0FBC-43A1-970A-31E9819CC95C}.Release|x64.ActiveCfg = Release|Win32
+		{0CE38CBA-9A3C-4820-82CA-5B22F98BD681}.Debug|Win32.ActiveCfg = Debug|Win32
+		{0CE38CBA-9A3C-4820-82CA-5B22F98BD681}.Debug|Win32.Build.0 = Debug|Win32
+		{0CE38CBA-9A3C-4820-82CA-5B22F98BD681}.Debug|x64.ActiveCfg = Debug|Win32
+		{0CE38CBA-9A3C-4820-82CA-5B22F98BD681}.Release|Win32.ActiveCfg = Release|Win32
+		{0CE38CBA-9A3C-4820-82CA-5B22F98BD681}.Release|Win32.Build.0 = Release|Win32
+		{0CE38CBA-9A3C-4820-82CA-5B22F98BD681}.Release|x64.ActiveCfg = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
