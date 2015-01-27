@@ -34,7 +34,7 @@
     __pragma(warning(pop))
 
 /// @summary Define the size of the default file mapping, in bytes.
-#define MAPPING_SIZE    (1ULL * 1024ULL * 1024ULL)
+#define MAPPING_SIZE    (20ULL * 1024ULL * 1024ULL)
 
 /// @summary Use the _rotl intrinsic, which is significantly more efficient
 /// on MSVC; use (x << y) | (x >> (32 - y)) on gcc for the same effect.
@@ -82,6 +82,7 @@ struct prefetch_state_t
     prefetchq_t  RequestQ;    /// The queue of pending requests.
     HANDLE       ExitSignal;  /// Manual reset event to signal exit.
     HANDLE       WorkSignal;  /// Manual reset event to signal pending requests.
+    HANDLE       Thread;      /// The handle of the prefetch thread.
 };
 
 /// @summary Define the state associated with a single active file.
@@ -298,6 +299,7 @@ static void prefetch_init(prefetch_state_t *state)
     spsc_fifo_flush(&state->RequestQ);
     state->ExitSignal = CreateEvent(NULL, TRUE, FALSE, NULL);
     state->WorkSignal = CreateEvent(NULL, TRUE, FALSE, NULL);
+    state->Thread     = NULL;
 }
 
 static void prefetch_free(prefetch_state_t *state)
@@ -307,17 +309,44 @@ static void prefetch_free(prefetch_state_t *state)
     spsc_fifo_flush(&state->RequestQ);
     state->ExitSignal = NULL;
     state->WorkSignal = NULL;
+    state->Thread     = NULL;
+}
+
+static bool prefetch_prime(HANDLE fd, int64_t offset, int64_t amount)
+{
+    LARGE_INTEGER apos   ={0};
+    int64_t const stride = 8 * 4096;
+    int64_t       rpos   = 0;
+    while (rpos < amount)
+    {
+        uint8_t buf;
+        DWORD   num    = 0;
+        apos.QuadPart  = offset + rpos;
+        SetFilePointerEx(fd, apos, NULL, FILE_BEGIN);
+        if (ReadFile(fd, &buf, 1, &num, NULL) && num == 0)
+        {   // we've hit the end of the file, no need to continue prefetch.
+            return false;
+        }
+        rpos += stride;
+    }
+    return true;
 }
 
 static bool prefetch_range(prefetch_state_t *state, HANDLE fd, int64_t offset, size_t amount)
 {
+    // prefetch the remaining data on the background thread.
     prefetch_request_t req;
     req.Fildes  = fd;
     req.Offset  = offset;
     req.Amount  = amount;
     if (spsc_fifo_put(&state->RequestQ, req))
-    {
+    {   // temporarily boost the thread priority, then satify the wait
+        // condition and yield the time slice of the calling thread so 
+        // that some prefetching can occur before we start working with
+        // the data. the prefetch thread will drop its priority back down.
+        //SetThreadPriority(state->Thread, THREAD_PRIORITY_ABOVE_NORMAL);
         SetEvent(state->WorkSignal);
+        //SwitchToThread();
         return true;
     }
     else return false;
@@ -359,7 +388,7 @@ static DWORD WINAPI prefetch_thread(void *arg)
                 ETWMarkerTask("Prefetch-Start");
                 spsc_fifo_get(&S->RequestQ, req);
                 LARGE_INTEGER apos    = {0};
-                int64_t const stride =  8 * 1024;
+                int64_t const stride =  8 * 4096;
                 int64_t       rpos   = 0;
                 while (rpos < req.Amount)
                 {
@@ -372,6 +401,8 @@ static DWORD WINAPI prefetch_thread(void *arg)
                 }
             }
         }
+        // lower our thread priority before going back to sleep.
+        //SetThreadPriority(S->Thread, THREAD_PRIORITY_NORMAL);
     }
 
 terminate_thread:
@@ -778,6 +809,8 @@ int main(int argc, char **argv)
     do
     {   // emit a marker event for viewing in WPA.
         ETWMarkerMain("Main-Tick");
+        // prefetch everything into memory.
+        prefetch_prime(file_state.Fildes, file_state.FileOffset, file_state.MapSize);
         // perform some computation on each byte in the mapped range.
         hash_update(file_state.BufferBeg, file_state.MapSize, file_state.Hash);
         // update the view to point to the next contiguous range in the file.
