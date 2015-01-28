@@ -34,7 +34,7 @@
     __pragma(warning(pop))
 
 /// @summary Define the size of the default file mapping, in bytes.
-#define MAPPING_SIZE    (20ULL * 1024ULL * 1024ULL)
+#define MAPPING_SIZE    (2ULL * 1024ULL * 1024ULL)
 
 /// @summary Use the _rotl intrinsic, which is significantly more efficient
 /// on MSVC; use (x << y) | (x >> (32 - y)) on gcc for the same effect.
@@ -66,6 +66,7 @@ struct spsc_fifo_t
 /// @summary Defines the data associated with a single file prefetch request.
 struct prefetch_request_t
 {
+    intptr_t     Id;          /// An application-defined request identifier.
     HANDLE       Fildes;      /// The file descriptor to read from.
     int64_t      Offset;      /// The byte offset to read from.
     int64_t      Amount;      /// The number of bytes that are mapped.
@@ -74,12 +75,14 @@ struct prefetch_request_t
 /// @summary Define the maximum number of outstanding prefetch requests.
 /// This value must be a power of two greater than zero.
 #define PREFETCH_MAX_REQUESTS   64
-typedef spsc_fifo_t<prefetch_request_t, PREFETCH_MAX_REQUESTS> prefetchq_t;
+typedef spsc_fifo_t<prefetch_request_t, PREFETCH_MAX_REQUESTS> pfrequestq_t;
+typedef spsc_fifo_t<intptr_t          , PREFETCH_MAX_REQUESTS> pfcancelq_t;
 
 /// @summary Define the state used to communicate with the prefetch thread.
 struct prefetch_state_t
 {
-    prefetchq_t  RequestQ;    /// The queue of pending requests.
+    pfrequestq_t RequestQ;    /// The queue of pending requests.
+    pfcancelq_t  CancelQ;     /// The queue of pending cancellations.
     HANDLE       ExitSignal;  /// Manual reset event to signal exit.
     HANDLE       WorkSignal;  /// Manual reset event to signal pending requests.
     HANDLE       Thread;      /// The handle of the prefetch thread.
@@ -294,74 +297,64 @@ static inline bool spsc_fifo_get(spsc_fifo_t<T, N> *fifo, T& item)
     else return false;
 }
 
-static void prefetch_init(prefetch_state_t *state)
+/// @summary Check to see if a request has been cancelled, and if so, 
+/// remove the cancellation from the cancellation list.
+/// @param id The application-defined identifier of the request to check.
+/// @param cancel_list The list of cancelled request Ids.
+/// @param list_size The number of items in the cancel list.
+/// @return true if the request has been cancelled.
+static inline bool is_cancelled(intptr_t id, intptr_t *cancel_list, size_t& list_size)
 {
-    spsc_fifo_flush(&state->RequestQ);
-    state->ExitSignal = CreateEvent(NULL, TRUE, FALSE, NULL);
-    state->WorkSignal = CreateEvent(NULL, TRUE, FALSE, NULL);
-    state->Thread     = NULL;
-}
-
-static void prefetch_free(prefetch_state_t *state)
-{
-    if (state->WorkSignal != NULL) CloseHandle(state->WorkSignal);
-    if (state->ExitSignal != NULL) CloseHandle(state->ExitSignal);
-    spsc_fifo_flush(&state->RequestQ);
-    state->ExitSignal = NULL;
-    state->WorkSignal = NULL;
-    state->Thread     = NULL;
-}
-
-static bool prefetch_prime(HANDLE fd, int64_t offset, int64_t amount)
-{
-    LARGE_INTEGER apos   ={0};
-    int64_t const stride = 8 * 4096;
-    int64_t       rpos   = 0;
-    while (rpos < amount)
+    for (size_t i = 0; i < list_size; ++i)
     {
-        uint8_t buf;
-        DWORD   num    = 0;
-        apos.QuadPart  = offset + rpos;
-        SetFilePointerEx(fd, apos, NULL, FILE_BEGIN);
-        if (ReadFile(fd, &buf, 1, &num, NULL) && num == 0)
-        {   // we've hit the end of the file, no need to continue prefetch.
-            return false;
+        if (id == cancel_list[i])
+        {   // the specified request has been cancelled.
+            // remove it from the cancellation list.
+            cancel_list[i] = cancel_list[--list_size];
+            return true;
         }
-        rpos += stride;
     }
-    return true;
+    return false;
 }
 
-static bool prefetch_range(prefetch_state_t *state, HANDLE fd, int64_t offset, size_t amount)
+/// @summary Retrieves any items from the prefetch cancellation queue and 
+/// appends them to the local cancellation list.
+/// @param state The prefetch thread state.
+/// @param cancel_list The prefetch cancellation list.
+/// @param list_size The current size of the list. On return, this value is
+/// set to the new size of the local cancellation list.
+/// @return true if the cancellation list contains at least one item.
+static bool update_cancel_list(prefetch_state_t *state, intptr_t *cancel_list, size_t &list_size)
 {
-    // prefetch the remaining data on the background thread.
-    prefetch_request_t req;
-    req.Fildes  = fd;
-    req.Offset  = offset;
-    req.Amount  = amount;
-    if (spsc_fifo_put(&state->RequestQ, req))
-    {   // temporarily boost the thread priority, then satify the wait
-        // condition and yield the time slice of the calling thread so 
-        // that some prefetching can occur before we start working with
-        // the data. the prefetch thread will drop its priority back down.
-        //SetThreadPriority(state->Thread, THREAD_PRIORITY_ABOVE_NORMAL);
-        SetEvent(state->WorkSignal);
-        //SwitchToThread();
-        return true;
+    intptr_t id;
+    while (!spsc_fifo_empty(&state->CancelQ))
+    {
+        spsc_fifo_get(&state->CancelQ, id);
+        cancel_list[list_size++] = id;
     }
-    else return false;
+    return (list_size > 0);
 }
 
+/// @summary Implements the main loop of the prefetch thread.
+/// @param arg Pointer to a prefetch_state_t instance.
+/// @return Zero if the thread completes successfully.
 static DWORD WINAPI prefetch_thread(void *arg)
 {
-    prefetch_state_t   *S  = (prefetch_state_t*) arg;
-    HANDLE wait_handles[2] = { S->ExitSignal, S->WorkSignal };
-    DWORD  return_value    = 0;
+    static const size_t CL_SIZE        = PREFETCH_MAX_REQUESTS;
+    static const size_t IO_SIZE        = 1024 * 1024; // 1MB
+    prefetch_state_t   *S              = (prefetch_state_t*) arg;
+    HANDLE              wait_handle[2] = { S->ExitSignal, S->WorkSignal };
+    DWORD               return_value   = 0;
+    size_t              cancel_count   = 0;
+    intptr_t            cancel_list[CL_SIZE];
+    uint8_t             io_buffer  [IO_SIZE];
 
     for ( ; ; )
     {
+        ETWMarkerTask("PREFETCH-SLEEP");
         bool   work_queued = false;
-        DWORD  wake_reason = WaitForMultipleObjectsEx(2, wait_handles, FALSE, INFINITE, TRUE);
+        DWORD  wake_reason = WaitForMultipleObjectsEx(2, wait_handle, FALSE, INFINITE, TRUE);
+        ETWMarkerTask("PREFETCH-WAKE");
         switch(wake_reason)
         {
         case WAIT_OBJECT_0 + 0:    /* S->ExitSignal */
@@ -385,29 +378,123 @@ static DWORD WINAPI prefetch_thread(void *arg)
             prefetch_request_t  req;
             while (!spsc_fifo_empty(&S->RequestQ))
             {
-                ETWMarkerTask("Prefetch-Start");
                 spsc_fifo_get(&S->RequestQ, req);
-                LARGE_INTEGER apos    = {0};
-                int64_t const stride =  8 * 4096;
-                int64_t       rpos   = 0;
-                while (rpos < req.Amount)
-                {
-                    uint8_t buf;
-                    DWORD   num;
-                    apos.QuadPart  = req.Offset + rpos;
-                    SetFilePointerEx(req.Fildes , apos, NULL, FILE_BEGIN);
-                    ReadFile(req.Fildes, &buf, 1, &num, NULL);
-                    rpos += stride;
+
+                LARGE_INTEGER  apos   = {0};
+                int64_t        rpos   =  0;
+                int64_t  const offset = req.Offset;
+                int64_t  const amount = req.Amount;
+                HANDLE         fd     = req.Fildes;
+                intptr_t const id     = req.Id;
+                ETWMarkerFormatTask("PREFETCH-START %p", req.Id);
+                while (rpos  < amount)
+                {   // process any pending cancellations.
+                    if (update_cancel_list(S, cancel_list, cancel_count))
+                    {   // there's at least one item in the cancellation list.
+                        if (is_cancelled(id , cancel_list, cancel_count))
+                        {   // this request has been cancelled, so remove 
+                            // the cancellation from the list, and stop 
+                            // prefetching the current range of data.
+                            ETWMarkerFormatTask("PREFETCH-CANCEL %p", id);
+                            break;
+                        }
+                    }
+
+                    // request reads of 128 bytes at a time to prefetch pages.
+                    DWORD io_size  =(amount - rpos) < IO_SIZE ? (amount - rpos) : IO_SIZE;
+                    DWORD   nread  = 0;
+                    apos.QuadPart  = offset + rpos;
+                    SetFilePointerEx(fd, apos, NULL , FILE_BEGIN);
+                    ReadFile(fd, &io_buffer, io_size, &nread, NULL);
+                    rpos += io_size;
                 }
+                ETWMarkerFormatTask("PREFETCH-FINISH %p");
             }
+            cancel_count = 0;
         }
-        // lower our thread priority before going back to sleep.
-        //SetThreadPriority(S->Thread, THREAD_PRIORITY_NORMAL);
     }
 
 terminate_thread:
     return return_value;
 }
+
+/// @summary Initializes and starts the prefetch thread.
+/// @param state The prefetch state to initialize.
+static void prefetch_init(prefetch_state_t *state)
+{
+    spsc_fifo_flush(&state->RequestQ);
+    spsc_fifo_flush(&state->CancelQ);
+    state->ExitSignal = CreateEvent (NULL, TRUE, FALSE, NULL);
+    state->WorkSignal = CreateEvent (NULL, TRUE, FALSE, NULL);
+    state->Thread     = CreateThread(NULL, 4 * 1024 * 1024, prefetch_thread, state, 0, NULL);
+}
+
+/// @summary Releases resources associated with the prefetch thread.
+/// @param state The prefetch state to delete.
+static void prefetch_free(prefetch_state_t *state)
+{
+    if (state->Thread     != NULL) CloseHandle(state->Thread);
+    if (state->WorkSignal != NULL) CloseHandle(state->WorkSignal);
+    if (state->ExitSignal != NULL) CloseHandle(state->ExitSignal);
+    spsc_fifo_flush(&state->CancelQ);
+    spsc_fifo_flush(&state->RequestQ);
+    state->ExitSignal = NULL;
+    state->WorkSignal = NULL;
+    state->Thread     = NULL;
+}
+
+/// @summary Submits a request to the prefetch thread.
+/// @param state The prefetch thread state.
+/// @param fd The handle of the file to read.
+/// @param offset The absolute byte offset within the file at which to begin reading.
+/// @param amount The number of bytes to prefetch.
+/// @param id An application-defined identifier for the prefetch request.
+/// @return true if the request was submitted.
+static bool prefetch_range(prefetch_state_t *state, HANDLE fd, int64_t offset, size_t amount, intptr_t id)
+{
+    prefetch_request_t req;
+    req.Id      = id;
+    req.Fildes  = fd;
+    req.Offset  = offset;
+    req.Amount  = amount;
+    if (spsc_fifo_put(&state->RequestQ, req))
+    {   // notify the prefetch thread that there's work waiting.
+        SetEvent(state->WorkSignal);
+        return true;
+    }
+    else return false;
+}
+
+/// @summary Submits a cancellation request to the prefetch thread.
+/// @param state The prefetch thread state.
+/// @param id The application-defined identifier of the request to cancel.
+/// @return true if the request was submitted.
+static bool prefetch_cancel(prefetch_state_t *state, intptr_t id)
+{
+    return spsc_fifo_put(&state->CancelQ, id);
+}
+
+/// @summary Steps through a range of virtual addresses, touching the first byte
+/// of each page or block of pages to ensure that no page faults will occur 
+/// during later processing of the virtual address range.
+/// @param base_address The starting address of the mapped range.
+/// @param range_size The size of the range to walk, in bytes.
+/// @param page_size The size of a single page, in bytes.
+/// @param stride The number of pages between each touch.
+#pragma optimize ("", off)
+static void prefault_range(void const *base_address, size_t range_size, size_t page_size, size_t stride)
+{
+    uint8_t const *page_iter = (uint8_t const*) base_address;
+    size_t  const  increment = page_size  * stride;
+    size_t  const  nfaults   = range_size / increment;
+    uint8_t        value     = 0;
+    for (size_t i  = 0; i < nfaults; ++i)
+    {
+        value      = *page_iter;
+        page_iter += increment;
+    }
+}
+#pragma optimize ("", on)
 
 /// @summary Stat the input file and print out basic file attributes. This is
 /// done to ensure that the file exists prior to continuing.
@@ -580,7 +667,7 @@ static bool update_view(file_state_t *state, bool &eof)
     }
 
     eof  = false;
-    state->MapBase    = NULL;
+    state->MapBase    = view;
     state->MapSize    = actual_size;
     state->BufferBeg  = (uint8_t*) view;
     state->BufferEnd  = (uint8_t*) view + actual_size;
@@ -790,7 +877,6 @@ int main(int argc, char **argv)
     
     // set up the prefetch thread.
     prefetch_init(&prefetch_state);
-    prefetch = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) prefetch_thread, &prefetch_state, 0, NULL);
     
     if (!print_file_info(argv[1], file_size))
     {   // unable to stat the input file.
@@ -801,18 +887,32 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
-    // start prefetching the pages in the file.
-    prefetch_range(&prefetch_state, file_state.Fildes, 0, file_size);
-
+    // begin the main loop that does the work.
     hash_init(0, file_state.Hash);
-    bool eof = false;
+    intptr_t id  = 0;
+    bool    eof  = false;
     do
     {   // emit a marker event for viewing in WPA.
-        ETWMarkerMain("Main-Tick");
-        // prefetch everything into memory.
-        prefetch_prime(file_state.Fildes, file_state.FileOffset, file_state.MapSize);
+        ETWMarkerFormatMain("MAIN-BEGIN %p", id);
+        // cancel prefetching of the previously mapped range, because 
+        // this thread will prefault the entire range.
+        prefetch_cancel(&prefetch_state, id);
+        ETWMarkerFormatMain("MAIN-PREFAULT %p", id);
+        // pre-fault the entire range, so no faults are experienced while doing work.
+        prefault_range(file_state.BufferBeg, file_state.MapSize, 4096, 1);
+        ETWMarkerFormatMain("MAIN-PREFETCH %p", id+1);
+        // have the background thread start pre-faulting the next mapped range while 
+        // this thread spends time doing work on the currently mapped range.
+        HANDLE   fd     = file_state.Fildes;
+        int64_t  offset = file_state.FileOffset + file_state.MapSize;
+        size_t   amount = file_state.MapSize;
+        prefetch_range(&prefetch_state, fd, offset, amount, ++id);
+        ETWMarkerFormatMain("MAIN-PROCESS %p", id-1);
         // perform some computation on each byte in the mapped range.
-        hash_update(file_state.BufferBeg, file_state.MapSize, file_state.Hash);
+        for (size_t i = 0; i < 100; ++i)
+        {
+            hash_update(file_state.BufferBeg, file_state.MapSize, file_state.Hash);
+        }
         // update the view to point to the next contiguous range in the file.
         // eof will be set to true if we've hit end-of-file.
         update_view(&file_state, eof);

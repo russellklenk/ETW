@@ -30,7 +30,7 @@
     __pragma(warning(pop))
 
 /// @summary Define the size of the default file mapping, in bytes.
-#define MAPPING_SIZE    (19ULL * 1024ULL * 1024ULL)
+#define MAPPING_SIZE    (2ULL * 1024ULL * 1024ULL)
 
 /// @summary Use the _rotl intrinsic, which is significantly more efficient
 /// on MSVC; use (x << y) | (x >> (32 - y)) on gcc for the same effect.
@@ -509,7 +509,10 @@ int main(int argc, char **argv)
     {   // emit a marker event for viewing in WPA.
         ETWMarkerMain("Tick");
         // perform some computation on each byte in the mapped range.
-        hash_update(file_state.BufferBeg, file_state.MapSize, file_state.Hash);
+        for (size_t i = 0; i < 100; ++i)
+        {
+            hash_update(file_state.BufferBeg, file_state.MapSize, file_state.Hash);
+        }
         // update the view to point to the next contiguous range in the file.
         // eof will be set to true if we've hit end-of-file.
         update_view(&file_state, eof);
